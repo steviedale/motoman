@@ -47,14 +47,24 @@ public:
     return this->joint_names_;
   }
 
-  std::string get_name()
+  const std::string& get_name()
   {
     return this->name_;
   }
 
-  std::string get_ns()
+  const std::string& get_joint_name(std::size_t idx)
+  {
+    return this->joint_names_[idx];
+  }
+
+  const std::string& get_ns()
   {
     return this->ns_;
+  }
+
+  std::size_t get_num_joints()
+  {
+    return this->joint_names_.size();
   }
 
   int get_group_id()
