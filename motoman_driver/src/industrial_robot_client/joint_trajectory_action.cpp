@@ -55,6 +55,23 @@ JointTrajectoryAction::JointTrajectoryAction() :
                  boost::bind(&JointTrajectoryAction::goalCB, this, _1),
                  boost::bind(&JointTrajectoryAction::cancelCB, this, _1), false)
 {
+  /**
+    * This creates N action servers: 1 for the entire robot (ie: all groups),
+    * and 1 per configured group.
+    *
+    * the per-group ones function correctly.
+    *
+    * the entire-robot one is messed up right now:
+    *
+    *  - goal completion status is not being tracked correctly
+    *  - feedback states are not subscribed to (so isWithinGoalConstraints can't work correctly)
+    *  - and a bunch of other things
+    *
+    * you can even comment most code for the global action server and this class
+    * will still compile.
+    *
+  */
+
   ros::NodeHandle pn("~");
 
   pn.param("constraints/goal_threshold", goal_threshold_, DEFAULT_GOAL_THRESHOLD_);
@@ -62,6 +79,12 @@ JointTrajectoryAction::JointTrajectoryAction() :
   std::map<int, RobotGroup> robot_groups;
   getJointGroups("topic_list", robot_groups);
 
+  // for each configured group, create:
+  //  - a follow jointtrajectory action server
+  //  - a publisher for that group's 'joint_path_command' topic
+  //  - a subscriber for that group's 'feedback_states' topic
+  //  - a subscriber for the global 'robot_status' topic (why?)
+  //
   for (int i = 0; i < robot_groups.size(); i++)
   {
 
@@ -86,6 +109,10 @@ JointTrajectoryAction::JointTrajectoryAction() :
                                joint_path_action_name + "/feedback_states", 1,
                                boost::bind(&JointTrajectoryAction::controllerStateCB,
                                            this, _1, group_number_int));
+
+    // TODO: should this be moved out of the for? There is only a single
+    // robot_status per controller, not per group.
+    // Note: it is stored for every group in the 'sub_status_' member below though
     sub_robot_status_ = node_.subscribe(
                           "robot_status", 1, &JointTrajectoryAction::robotStatusCB, this);
 
@@ -191,116 +218,162 @@ void JointTrajectoryAction::watchdog(const ros::TimerEvent &e, int group_number)
 
 void JointTrajectoryAction::goalCB(JointTractoryActionServer::GoalHandle gh)
 {
-  gh.setAccepted();
+  // TODO: check for empty trajectories
+  // TODO: cancel current goal if one is active
+  // TODO: check goal traj.joint_names == all_joint_names
 
-  int group_number;
-
-// TODO(thiagodefreitas): change for getting the id from the group instead of a sequential checking on the map
-
-  ros::Duration last_time_from_start(0.0);
-
+  const trajectory_msgs::JointTrajectory& ros_jtraj = gh.getGoal()->trajectory;
   motoman_msgs::DynamicJointTrajectory dyn_traj;
 
-  for (int i = 0; i < gh.getGoal()->trajectory.points.size(); i++)
+  ROS_INFO_STREAM("Accepted goal traj. Length: " << ros_jtraj.points.size());
+
+  // loop over the incoming JointTrajectory and convert it to a
+  // DynamicJointTrajectory msg.
+  //
+  // As a ROS JointTrajectory does not support a 'joint group' concept, this
+  // loop mixes and matches data in the ROS JointTrajectory with the groups
+  // as defined on the parameter server.
+  //
+  // pseudo code:
+  //
+  //  dyn_traj = []
+  //
+  //  for pt in ros_traj:
+  //    dyn_pt = []
+  //
+  //    for grp in groups:
+  //      dyn_grp.time_from_start = ros_traj.time_from_start
+  //      dyn_grp.grp_nr = grp.id
+  //      dyn_grp.num_joints = grp.num_joints
+  //
+  //      for joint_idx in [0..grp.get_num_joints()]:
+  //        dyn_grp.pos[joint_idx] = ros_traj.pos[joint_idx]
+  //        dyn_grp.vel[joint_idx] = ros_traj.vel[joint_idx]
+  //        dyn_grp.acc[joint_idx] = ros_traj.acc[joint_idx]
+  //        dyn_grp.eff[joint_idx] = ros_traj.eff[joint_idx]
+  //
+  //      dyn_pt.add(dyn_grp)
+  //    dyn_traj.add(dyn_pt)
+  //
+  for (std::size_t i = 0; i < ros_jtraj.points.size(); ++i)
   {
-    motoman_msgs::DynamicJointPoint dpoint;
+    const trajectory_msgs::JointTrajectoryPoint& jtraj_pt = ros_jtraj.points[i];
+    motoman_msgs::DynamicJointPoint dyn_joint_pt;
 
-    for (int rbt_idx = 0; rbt_idx < robot_groups_.size(); rbt_idx++)
+    ROS_INFO_STREAM("Converting pt " << i << " for " << robot_groups_.size() << " groups");
+
+    for (std::size_t rbt_idx = 0; rbt_idx < robot_groups_.size(); ++rbt_idx)
     {
-      size_t ros_idx = std::find(
-                         gh.getGoal()->trajectory.joint_names.begin(),
-                         gh.getGoal()->trajectory.joint_names.end(),
-                         robot_groups_[rbt_idx].get_joint_names()[0])
-                       - gh.getGoal()->trajectory.joint_names.begin();
-
-      bool is_found = ros_idx < gh.getGoal()->trajectory.joint_names.size();
-
-      group_number = rbt_idx;
       motoman_msgs::DynamicJointsGroup dyn_group;
 
-      int num_joints = robot_groups_[group_number].get_joint_names().size();
+      // retrieve group info structure from map (robot_groups_)
+      RobotGroup robot_group = robot_groups_[rbt_idx];
+      std::size_t num_joints = robot_group.get_num_joints();
 
-      if (is_found)
+      ROS_INFO_STREAM("Converting group " << robot_group.get_group_id() << " at idx " << rbt_idx << " with " << num_joints << " joints.");
+
+      // prealloc vector so we can use simple indexing later when copying. But
+      // only do that if there is actually data we need to convert.
+      if (!jtraj_pt.positions.empty())
+        dyn_group.positions.resize(num_joints, 0.0);
+      if (!jtraj_pt.velocities.empty())
+        dyn_group.velocities.resize(num_joints, 0.0);
+      if (!jtraj_pt.velocities.empty())
+        dyn_group.accelerations.resize(num_joints, 0.0);
+      if (!jtraj_pt.effort.empty())
+        dyn_group.effort.resize(num_joints, 0.0);
+
+      // TODO: check that num_joints == len(ros_jtraj.joint_names)
+      // TODO: check that num_joints == len(jtraj_pt.positions) == len(jtraj_pt.velocities) etc
+      // TODO: check that all joints are present (ie: the ones we expect)
+
+      // iterating over all joints, copy the values for position, velocity,
+      // acceleration and effort to their correct place in the arrays in the
+      // DynamicJointsGroup instance being constructed.
+      for (std::size_t ctrlr_idx = 0; ctrlr_idx < num_joints; ++ctrlr_idx)
       {
-        if (gh.getGoal()->trajectory.points[i].positions.empty())
-        {
-          std::vector<double> positions(num_joints, 0.0);
-          dyn_group.positions = positions;
-        }
-        else
-          dyn_group.positions.insert(
-            dyn_group.positions.begin(),
-            gh.getGoal()->trajectory.points[i].positions.begin() + ros_idx,
-            gh.getGoal()->trajectory.points[i].positions.begin() + ros_idx
-            + robot_groups_[rbt_idx].get_joint_names().size());
+        // get hold of the jointname corresponding to the index we're processing
+        const std::string& joint_name = robot_group.get_joint_name(ctrlr_idx);
 
-        if (gh.getGoal()->trajectory.points[i].velocities.empty())
+        // find the index of the /name/ of joint[j] in the joint names of the
+        // group we're currently processing
+        std::vector<std::string>::const_iterator res = std::find(
+              ros_jtraj.joint_names.begin(),
+              ros_jtraj.joint_names.end(), joint_name);
+        // make sure we found it
+        if (res == ros_jtraj.joint_names.end())
         {
-          std::vector<double> velocities(num_joints, 0.0);
-          dyn_group.velocities = velocities;
+          // we didn't, so error out
+          ROS_ERROR("Joint trajectory action failing on invalid joints: cannot find '%s' in goal trajectory", joint_name.c_str());
+          control_msgs::FollowJointTrajectoryResult rslt;
+          rslt.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_JOINTS;
+          gh.setRejected(rslt, "Joint names do not match");
+          return;
         }
-        else
-          dyn_group.velocities.insert(
-            dyn_group.velocities.begin(),
-            gh.getGoal()->trajectory.points[i].velocities.begin()
-            + ros_idx, gh.getGoal()->trajectory.points[i].velocities.begin()
-            + ros_idx + robot_groups_[rbt_idx].get_joint_names().size());
+        // we did, calculate index in jointnames vector
+        std::size_t ros_idx = res - ros_jtraj.joint_names.begin();
 
-        if (gh.getGoal()->trajectory.points[i].accelerations.empty())
-        {
-          std::vector<double> accelerations(num_joints, 0.0);
-          dyn_group.accelerations = accelerations;
-        }
-        else
-          dyn_group.accelerations.insert(
-            dyn_group.accelerations.begin(),
-            gh.getGoal()->trajectory.points[i].accelerations.begin()
-            + ros_idx, gh.getGoal()->trajectory.points[i].accelerations.begin()
-            + ros_idx + robot_groups_[rbt_idx].get_joint_names().size());
-        if (gh.getGoal()->trajectory.points[i].effort.empty())
-        {
-          std::vector<double> effort(num_joints, 0.0);
-          dyn_group.effort = effort;
-        }
-        else
-          dyn_group.effort.insert(
-            dyn_group.effort.begin(),
-            gh.getGoal()->trajectory.points[i].effort.begin()
-            + ros_idx, gh.getGoal()->trajectory.points[i].effort.begin()
-            + ros_idx + robot_groups_[rbt_idx].get_joint_names().size());
-        dyn_group.time_from_start = gh.getGoal()->trajectory.points[i].time_from_start;
-        dyn_group.group_number = group_number;
-        dyn_group.num_joints = dyn_group.positions.size();
+        ROS_INFO_STREAM("Found '" << joint_name << "' at index " << ros_idx);
+
+        // copy positions
+        if (!jtraj_pt.positions.empty())
+          dyn_group.positions[ctrlr_idx] = jtraj_pt.positions[ros_idx];
+
+        // copy velocities
+        if (!jtraj_pt.velocities.empty())
+          dyn_group.velocities[ctrlr_idx] = jtraj_pt.velocities[ros_idx];
+
+        // copy accelerations
+        if (!jtraj_pt.accelerations.empty())
+          dyn_group.accelerations[ctrlr_idx] = jtraj_pt.accelerations[ros_idx];
+
+        // copy effort
+        if (!jtraj_pt.effort.empty())
+          dyn_group.effort[ctrlr_idx] = jtraj_pt.effort[ros_idx];
       }
 
-      // Generating message for groups that were not present in the trajectory message
-      else
-      {
-        std::vector<double> positions(num_joints, 0.0);
-        std::vector<double> velocities(num_joints, 0.0);
-        std::vector<double> accelerations(num_joints, 0.0);
-        std::vector<double> effort(num_joints, 0.0);
+      // copy the rest of the fields
+      dyn_group.time_from_start = jtraj_pt.time_from_start;
+      dyn_group.group_number = robot_group.get_group_id();
+      dyn_group.num_joints = num_joints;
 
-        dyn_group.positions = positions;
-        dyn_group.velocities = velocities;
-        dyn_group.accelerations = accelerations;
-        dyn_group.effort = effort;
+      ROS_INFO_STREAM("DynGrp: time_from_start: " << dyn_group.time_from_start
+        << "; group_number: " << dyn_group.group_number << "; num_joints: "
+        << dyn_group.num_joints);
 
-        dyn_group.time_from_start = gh.getGoal()->trajectory.points[i].time_from_start;
-        dyn_group.group_number = group_number;
-        dyn_group.num_joints = num_joints;
-      }
-
-      dpoint.groups.push_back(dyn_group);
+      dyn_joint_pt.groups.push_back(dyn_group);
     }
-    dpoint.num_groups = dpoint.groups.size();
-    dyn_traj.points.push_back(dpoint);
+
+    dyn_joint_pt.num_groups = dyn_joint_pt.groups.size();
+    dyn_traj.points.push_back(dyn_joint_pt);
   }
-  dyn_traj.header = gh.getGoal()->trajectory.header;
+
+  ROS_INFO_STREAM("Converted all points");
+
+  // setup the rest of the fields
+  dyn_traj.header = ros_jtraj.header;
   dyn_traj.header.stamp = ros::Time::now();
+
   // Publishing the joint names for the 4 groups
   dyn_traj.joint_names = all_joint_names_;
 
+  // register the new goal for all involved groups
+  // TODO: get group info somewhere nicer
+  for (std::size_t i = 0; i < dyn_traj.points[0].num_groups; ++i)
+  {
+    // TODO: this assumes it's not an empty trajectory
+    int grp_nr = dyn_traj.points[0].groups[i].group_number;
+    has_active_goal_map_[grp_nr] = true;
+    active_goal_map_[grp_nr] = gh;
+    current_traj_map_[grp_nr] = ros_jtraj;
+  }
+
+  // all ok, we've accepted the goal
+  gh.setAccepted();
+
+  ROS_INFO_STREAM("\n\n\nmsg: " << dyn_traj << "\n\n\n");
+
+  // pass the trajectory to the trajectory streamer
   this->pub_trajectory_command_.publish(dyn_traj);
 }
 
@@ -449,6 +522,18 @@ void JointTrajectoryAction::cancelCB(
   }
 }
 
+// TODO: motoros flags motion complete too soon (Eric will fix)
+// TODO: this checks only the current group (robot_id), and cannot conlude anything about the entire robot,
+//       it could well be that other groups are not finished yet. That would not
+//       be a problem, if 'in_motion' worked ok, but it doesn't.
+//       And somehow this callback is also called for "all groups" goals (ie: not for a specific group),
+//       that doesn't work, as in that case, all entries in the 'active_goal_map_' will point
+//       to the same goal, and setting succeeded on one will result in the entire motion being set
+//       succeeded, even if some groups have not finished yet.
+//
+//       But if 'in_motion' works correctly, then this shouldn't happen, as motoros will only report
+//       'in_motion == False' when the motion has actually completed /for all groups/.
+//
 void JointTrajectoryAction::controllerStateCB(
   const control_msgs::FollowJointTrajectoryFeedbackConstPtr &msg, int robot_id)
 {
@@ -486,6 +571,7 @@ void JointTrajectoryAction::controllerStateCB(
       // be moving.  The current robot driver calls a motion stop if it receives
       // a new trajectory while it is still moving.  If the driver is not publishing
       // the motion state (i.e. old driver), this will still work, but it warns you.
+
       if (last_robot_status_->in_motion.val == industrial_msgs::TriState::FALSE)
       {
         ROS_INFO("Inside goal constraints, stopped moving, return success for action");
@@ -600,6 +686,7 @@ void JointTrajectoryAction::abortGoal(int robot_id)
   has_active_goal_map_[robot_id] = false;
 }
 
+// TODO: this one doesn't seem to be used at all anymore?
 bool JointTrajectoryAction::withinGoalConstraints(
   const control_msgs::FollowJointTrajectoryFeedbackConstPtr &msg,
   const trajectory_msgs::JointTrajectory & traj)
@@ -629,6 +716,8 @@ bool JointTrajectoryAction::withinGoalConstraints(
   return rtn;
 }
 
+// TODO: this should check for all groups, not just the 3rd one
+// basically do what allGroupsFinished() does in the teamdelft fix
 bool JointTrajectoryAction::withinGoalConstraints(const control_msgs::FollowJointTrajectoryFeedbackConstPtr &msg,
     const motoman_msgs::DynamicJointTrajectory & traj)
 {
@@ -661,6 +750,7 @@ bool JointTrajectoryAction::withinGoalConstraints(const control_msgs::FollowJoin
   return rtn;
 }
 
+// TODO: can we reuse this in the 'check all groups' overload?
 bool JointTrajectoryAction::withinGoalConstraints(
   const control_msgs::FollowJointTrajectoryFeedbackConstPtr &msg,
   const trajectory_msgs::JointTrajectory & traj, int robot_id)
@@ -677,10 +767,31 @@ bool JointTrajectoryAction::withinGoalConstraints(
 
     int group_number = robot_id;
 
+    // TODO: refactor / make nicer
+    // omdat joint names in de traj in elke volgorde mogen staan, moeten we ze
+    // eerst even in dezelfde volgorde zetten als op de parameter server.
+    // anders gaat 'isWithinRange(..)' zeuren dat de vectors niet gelijk zijn.
+    const std::size_t grp_num_joints = robot_groups_[group_number].get_num_joints();
+
+    std::vector<double> sorted_positions(grp_num_joints);
+    std::vector<std::string> sorted_joint_names(grp_num_joints);
+
+    // sort_index is gewoon van 0 naar NUM_JOINTS index into platte arrays
+    for (int sort_index = 0; sort_index < grp_num_joints; sort_index++)
+    {
+        // dit is de index in de ros JointTrajectory
+        size_t ros_idx = std::find(traj.joint_names.begin(), traj.joint_names.end(), robot_groups_[group_number].get_joint_name(sort_index)) - traj.joint_names.begin();
+
+        sorted_positions[sort_index] = traj.points[last_point].positions[ros_idx];
+        sorted_joint_names[sort_index] = traj.joint_names[ros_idx];
+    }
+
     if (industrial_robot_client::utils::isWithinRange(
           robot_groups_[group_number].get_joint_names(),
-          last_trajectory_state_map_[group_number]->actual.positions, traj.joint_names,
-          traj.points[last_point].positions, goal_threshold_))
+          last_trajectory_state_map_[group_number]->actual.positions,
+          sorted_joint_names,
+          sorted_positions,
+          goal_threshold_))
     {
       rtn = true;
     }
