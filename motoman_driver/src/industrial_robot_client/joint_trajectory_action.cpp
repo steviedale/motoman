@@ -218,12 +218,28 @@ void JointTrajectoryAction::watchdog(const ros::TimerEvent &e, int group_number)
 
 void JointTrajectoryAction::goalCB(JointTractoryActionServer::GoalHandle gh)
 {
-  // TODO: check for empty trajectories
   // TODO: cancel current goal if one is active
-  // TODO: check goal traj.joint_names == all_joint_names
 
   const trajectory_msgs::JointTrajectory& ros_jtraj = gh.getGoal()->trajectory;
   motoman_msgs::DynamicJointTrajectory dyn_traj;
+
+  if (ros_jtraj.points.empty())
+  {
+    ROS_ERROR("Joint trajectory action failed on empty trajectory");
+    control_msgs::FollowJointTrajectoryResult rslt;
+    rslt.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    gh.setRejected(rslt, "Empty trajectory");
+    return;
+  }
+
+  if (!industrial_utils::isSimilar(all_joint_names_, ros_jtraj.joint_names))
+  {
+    ROS_ERROR("Joint trajectory action failing on invalid joints");
+    control_msgs::FollowJointTrajectoryResult rslt;
+    rslt.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_JOINTS;
+    gh.setRejected(rslt, "Joint names do not match");
+    return;
+  }
 
   ROS_INFO_STREAM("Accepted goal traj. Length: " << ros_jtraj.points.size());
 
@@ -282,10 +298,6 @@ void JointTrajectoryAction::goalCB(JointTractoryActionServer::GoalHandle gh)
         dyn_group.accelerations.resize(num_joints, 0.0);
       if (!jtraj_pt.effort.empty())
         dyn_group.effort.resize(num_joints, 0.0);
-
-      // TODO: check that num_joints == len(ros_jtraj.joint_names)
-      // TODO: check that num_joints == len(jtraj_pt.positions) == len(jtraj_pt.velocities) etc
-      // TODO: check that all joints are present (ie: the ones we expect)
 
       // iterating over all joints, copy the values for position, velocity,
       // acceleration and effort to their correct place in the arrays in the
@@ -375,6 +387,21 @@ void JointTrajectoryAction::goalCB(JointTractoryActionServer::GoalHandle gh)
 
   // pass the trajectory to the trajectory streamer
   this->pub_trajectory_command_.publish(dyn_traj);
+
+  // Adding some informational log messages to indicate unsupported goal constraints
+  if (gh.getGoal()->goal_time_tolerance.toSec() > 0.0)
+  {
+    ROS_WARN_STREAM("Ignoring goal time tolerance in action goal, may be supported in the future");
+  }
+  if (!gh.getGoal()->goal_tolerance.empty())
+  {
+    ROS_WARN_STREAM(
+      "Ignoring goal tolerance in action, using paramater tolerance of " << goal_threshold_ << " instead");
+  }
+  if (!gh.getGoal()->path_tolerance.empty())
+  {
+    ROS_WARN_STREAM("Ignoring goal path tolerance, option not supported by ROS-Industrial drivers");
+  }
 }
 
 void JointTrajectoryAction::cancelCB(JointTractoryActionServer::GoalHandle gh)
