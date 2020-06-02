@@ -58,7 +58,7 @@ def main():
     #   2. T= 5: T joint rotated -20 degrees
     #   3. T=10: T joint rotated +20 degrees
 
-    q0 = robot_joint_states.positions
+    q0 = robot_joint_states.position
     q1 = list(q0)
     q2 = list(q0)
 
