@@ -1,0 +1,217 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="motoman_ar1440e" params="prefix">
+
+    <link name="${prefix}base_link" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/base_link.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/base_link.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_1_s" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_1_s.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_1_s.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_2_l1" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_2_l1.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_2_l1.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_3_l2" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_3_l2.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_3_l2.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_4_u" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_4_u.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_4_u.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_5_r" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_5_r.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_5_r.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_6_b" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_6_b.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_6_b.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link_7_t" >
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/visual/link_7_t.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="0.7 0.7 0.7 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://motoman_ar1440e_support/meshes/ar1440e/collision/link_7_t.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+   <link name="${prefix}tcp_link" />
+
+<!-- WARNING: effort fields have not been set -->
+   <joint name="${prefix}joint_1_s" type="revolute">
+      <parent link="${prefix}base_link" />
+      <child link = "${prefix}link_1_s" />
+      <origin xyz="0 0 0.165" rpy="0 0 0" />
+      <limit lower="${radians(-170)}" upper="${radians(170)}" effort="0" velocity="4.53"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_2_l1" type="revolute">
+      <parent link="${prefix}link_1_s" />
+      <child link = "${prefix}link_2_l1" />
+      <origin xyz="0.15 -0.066 0.285" rpy="${-pi/2} 0 ${pi}" />
+      <limit lower="${radians(-70)}" upper="${radians(148)}" effort="0" velocity="4.01"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_3_l2" type="revolute">
+      <parent link="${prefix}link_2_l1" />
+      <child link = "${prefix}link_3_l2" />
+      <origin xyz="0 -0.24 -0.066" rpy="${pi/2} ${pi} 0" />
+      <limit lower="${radians(-90)}" upper="${radians(90)}" effort="0" velocity="4.53"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_4u" type="revolute">
+      <parent link="${prefix}link_3_l2" />
+      <child link = "${prefix}link_4_u" />
+      <origin xyz="0 -0.0875 0.38" rpy="${-pi/2} 0 0" />
+      <limit lower="${radians(-80)}" upper="${radians(80)}" effort="0" velocity="4.53"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_5_r" type="revolute">
+      <parent link="${prefix}link_4_u" />
+      <child link = "${prefix}link_5_r" />
+      <origin xyz="0.265 -0.2 0.0875" rpy="${pi/2} 0 ${pi/2}" />
+      <limit lower="${radians(-200)}" upper="${radians(200)}" effort="0" velocity="8.2"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_6_b" type="revolute">
+      <parent link="${prefix}link_5_r" />
+      <child link = "${prefix}link_6_b" />
+      <origin xyz="0 -0.06 0.375" rpy="${-pi/2} ${-pi/2} 0" />
+      <limit lower="${radians(-150)}" upper="${radians(150)}" effort="0" velocity="8.2"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}joint_7_t" type="revolute">
+      <parent link="${prefix}link_6_b" />
+      <child link = "${prefix}link_7_t" />
+      <origin xyz="0.094 0 0.06" rpy="${pi/2} 0 ${pi/2}" />
+      <limit lower="${radians(-455)}" upper="${radians(455)}" effort="0" velocity="12.2"/>
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="${prefix}tcp_joint" type="fixed">
+      <parent link="${prefix}link_7_t" />
+      <child link = "${prefix}tcp_link" />
+      <origin xyz="0 0 0.006" rpy="0 0 0" />
+    </joint>
+
+  </xacro:macro>
+</robot>
+
