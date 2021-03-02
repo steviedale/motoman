@@ -1,8 +1,13 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-
   <xacro:macro name="motoman_ar1440e" params="prefix">
 
+    <!-- Properties -->
+    <material name="yaskawa_blue">
+          <color rgba="0.12941 0.14902 0.74902 1" />
+    </material>
+
+    <!-- link list -->
     <link name="${prefix}base_link" >
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -147,9 +152,9 @@
       </collision>
     </link>
 
-   <link name="${prefix}tcp_link" />
+   <link name="${prefix}tool0" />
+    <!-- end of link list -->
 
-<!-- WARNING: effort fields have not been set -->
    <joint name="${prefix}joint_1_s" type="revolute">
       <parent link="${prefix}base_link" />
       <child link = "${prefix}link_1_s" />
@@ -206,10 +211,19 @@
       <axis xyz="0 0 1" />
     </joint>
 
-    <joint name="${prefix}tcp_joint" type="fixed">
-      <parent link="${prefix}link_7_t" />
-      <child link = "${prefix}tcp_link" />
-      <origin xyz="0 0 0.006" rpy="0 0 0" />
+    <joint name="${prefix}joint_7_t-tool0" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <parent link="${prefix}link_7_t"/>
+        <child link="${prefix}tool0"/>
+    </joint>
+    <!-- end of joint list -->
+
+    <!-- ROS base_link to Robot Manufacturer World Coordinates transform -->
+    <link name="${prefix}base" />
+    <joint name="${prefix}base_link-base" type="fixed">
+        <origin xyz="0 0 0.540" rpy="0 0 0"/>
+        <parent link="${prefix}base_link"/>
+        <child link="${prefix}base"/>
     </joint>
 
   </xacro:macro>
