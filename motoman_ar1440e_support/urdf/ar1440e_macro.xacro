@@ -3,7 +3,7 @@
   <xacro:macro name="motoman_ar1440e" params="prefix">
 
     <!-- Properties -->
-    <material name="yaskawa_blue">
+    <material name="${prefix}yaskawa_blue">
           <color rgba="0.12941 0.14902 0.74902 1" />
     </material>
 
