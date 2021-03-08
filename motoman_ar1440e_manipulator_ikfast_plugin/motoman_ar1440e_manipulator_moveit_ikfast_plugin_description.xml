@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<library path="lib/libmotoman_ar1440e_manipulator_moveit_ikfast_plugin">
+  <class name="motoman_ar1440e_manipulator/IKFastKinematicsPlugin" type="motoman_ar1440e_manipulator::IKFastKinematicsPlugin" base_class_type="kinematics::KinematicsBase">
+    <description>IKFast61 plugin for closed-form kinematics of motoman_ar1440e manipulator</description>
+  </class>
+</library>

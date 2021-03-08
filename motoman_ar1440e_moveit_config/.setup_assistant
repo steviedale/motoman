@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: motoman_ar1440e_support
+    relative_path: urdf/ar1440e.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/motoman_ar1440e.srdf
+  CONFIG:
+    author_name: Stevie Dale
+    author_email: steven.dale@swri.org
+    generated_timestamp: 1615243588
